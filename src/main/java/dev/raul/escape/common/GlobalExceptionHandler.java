@@ -3,6 +3,7 @@ package dev.raul.escape.common;
 import dev.raul.escape.auth.EmailAlreadyRegisteredException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -53,5 +54,15 @@ public class GlobalExceptionHandler {
                 request.getRequestURI(),
                 fields
         );
+    }
+
+
+    @ExceptionHandler(BadCredentialsException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ApiError handleBadCredentials(BadCredentialsException exception,
+                                         HttpServletRequest request) {
+        return new ApiError(Instant.now(),
+                HttpStatus.UNAUTHORIZED.value(), HttpStatus.UNAUTHORIZED.getReasonPhrase(),
+                "Invalid email or password", request.getRequestURI(), Map.of());
     }
 }
