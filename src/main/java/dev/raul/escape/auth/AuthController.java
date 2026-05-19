@@ -1,22 +1,25 @@
 package dev.raul.escape.auth;
 
+import dev.raul.escape.auth.dto.JwtAuthResponse;
 import dev.raul.escape.security.AuthenticatedUser;
 import dev.raul.escape.user.AppUser;
 import dev.raul.escape.user.AppUserRepository;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.Instant;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -25,25 +28,29 @@ public class AuthController {
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
+    private final JwtEncoder jwtEncoder;
 
-    public AuthController(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager) {
+    public AuthController(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtEncoder jwtEncoder) {
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
+        this.jwtEncoder = jwtEncoder;
     }
 
     @GetMapping("/me")
-    public CurrentUserResponse currentUser(@AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
+    public CurrentUserResponse currentUser(JwtAuthenticationToken authentication) {
+
+        String userId = authentication.getToken()
+                .getSubject();
+
+        AppUser user = appUserRepository.findById(UUID.fromString(userId))
+                .orElseThrow();
 
         return new CurrentUserResponse(
-                authenticatedUser.getUser()
-                        .getId(),
-                authenticatedUser.getUser()
-                        .getEmail(),
-                authenticatedUser.getUser()
-                        .getDisplayName(),
-                authenticatedUser.getUser()
-                        .getRole()
+                user.getId(),
+                user.getEmail(),
+                user.getDisplayName(),
+                user.getRole()
                         .name()
         );
     }
@@ -71,45 +78,55 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public AuthResponse login(@Valid @RequestBody LoginRequest loginRequest, HttpServletRequest httpServletRequest) {
+    public JwtAuthResponse login(@Valid @RequestBody LoginRequest loginRequest) {
         String normalizedEmail = loginRequest.email()
                 .trim()
                 .toLowerCase();
 
-        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(normalizedEmail, loginRequest.password());
-        Authentication authentication = authenticationManager.authenticate(authenticationToken);
-        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
-        securityContext.setAuthentication(authentication);
-        SecurityContextHolder.setContext(securityContext);
+        UsernamePasswordAuthenticationToken authenticationToken =
+                new UsernamePasswordAuthenticationToken(normalizedEmail, loginRequest.password());
 
-        httpServletRequest.getSession(true)
-                .setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext);
+        Authentication authentication = authenticationManager.authenticate(authenticationToken);
 
         AuthenticatedUser authenticatedUser = (AuthenticatedUser) authentication.getPrincipal();
+        long expiresIn = 900;
+        Instant now = Instant.now();
 
-        return new AuthResponse(
-                authenticatedUser.getUser()
-                        .getId(),
-                authenticatedUser.getUser()
-                        .getEmail(),
-                authenticatedUser.getUser()
-                        .getDisplayName(),
-                authenticatedUser.getUser()
-                        .getRole()
-                        .name());
+        JwsHeader jwsHeader = JwsHeader.with(MacAlgorithm.HS256)
+                .build();
+
+        String token = jwtEncoder.encode(JwtEncoderParameters.from(
+                        jwsHeader,
+                        JwtClaimsSet.builder()
+                                .issuer("escape-api")
+                                .issuedAt(now)
+                                .expiresAt(now.plusSeconds(expiresIn))
+                                .subject(authenticatedUser.getUser()
+                                        .getId()
+                                        .toString())
+                                .claim("email", authenticatedUser.getUser()
+                                        .getEmail())
+                                .claim("role", authenticatedUser.getUser()
+                                        .getRole()
+                                        .name())
+                                .build()
+                ))
+                .getTokenValue();
+
+        return new JwtAuthResponse(token, "Bearer", expiresIn);
     }
 
-    @PostMapping("/logout")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void logout(HttpServletRequest request, HttpServletResponse response) {
-        HttpSession session = request.getSession(false);
-
-        if (session != null) {
-            session.invalidate();
-        }
-
-        SecurityContextHolder.clearContext();
-    }
+//    @PostMapping("/logout")
+//    @ResponseStatus(HttpStatus.NO_CONTENT)
+//    public void logout(HttpServletRequest request, HttpServletResponse response) {
+//        HttpSession session = request.getSession(false);
+//
+//        if (session != null) {
+//            session.invalidate();
+//        }
+//
+//        SecurityContextHolder.clearContext();
+//    }
 
 
 }

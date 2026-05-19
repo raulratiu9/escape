@@ -21,4 +21,10 @@ public class PingController {
     public String adminPing() {
         return "admin pong";
     }
+
+    @GetMapping("/user")
+    @PreAuthorize("hasRole('USER')")
+    public String user() {
+        return "user pong";
+    }
 }
