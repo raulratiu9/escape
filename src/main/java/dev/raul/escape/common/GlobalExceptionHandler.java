@@ -1,6 +1,7 @@
 package dev.raul.escape.common;
 
 import dev.raul.escape.auth.EmailAlreadyRegisteredException;
+import dev.raul.escape.auth.InvalidRefreshTokenException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -64,5 +65,21 @@ public class GlobalExceptionHandler {
         return new ApiError(Instant.now(),
                 HttpStatus.UNAUTHORIZED.value(), HttpStatus.UNAUTHORIZED.getReasonPhrase(),
                 "Invalid email or password", request.getRequestURI(), Map.of());
+    }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ApiError handleInvalidRefreshToken(
+            InvalidRefreshTokenException exception,
+            HttpServletRequest request
+    ) {
+        return new ApiError(
+                Instant.now(),
+                HttpStatus.UNAUTHORIZED.value(),
+                "Unauthorized",
+                exception.getMessage(),
+                request.getRequestURI(),
+                Map.of()
+        );
     }
 }

@@ -1,6 +1,8 @@
 package dev.raul.escape.auth;
 
 import dev.raul.escape.auth.dto.JwtAuthResponse;
+import dev.raul.escape.auth.dto.LogoutRequest;
+import dev.raul.escape.auth.dto.RefreshTokenRequest;
 import dev.raul.escape.security.AuthenticatedUser;
 import dev.raul.escape.user.AppUser;
 import dev.raul.escape.user.AppUserRepository;
@@ -26,12 +28,14 @@ import java.util.UUID;
 public class AuthController {
 
     private final AppUserRepository appUserRepository;
+    private final RefreshTokenService refreshTokenService;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtEncoder jwtEncoder;
 
-    public AuthController(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtEncoder jwtEncoder) {
+    public AuthController(AppUserRepository appUserRepository, RefreshTokenService refreshTokenService, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtEncoder jwtEncoder) {
         this.appUserRepository = appUserRepository;
+        this.refreshTokenService = refreshTokenService;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.jwtEncoder = jwtEncoder;
@@ -113,20 +117,56 @@ public class AuthController {
                 ))
                 .getTokenValue();
 
-        return new JwtAuthResponse(token, "Bearer", expiresIn);
+        String refreshToken = refreshTokenService.createRefreshToken((authenticatedUser.getUser()));
+
+        return new JwtAuthResponse(token, refreshToken, "Bearer", expiresIn);
     }
 
-//    @PostMapping("/logout")
-//    @ResponseStatus(HttpStatus.NO_CONTENT)
-//    public void logout(HttpServletRequest request, HttpServletResponse response) {
-//        HttpSession session = request.getSession(false);
-//
-//        if (session != null) {
-//            session.invalidate();
-//        }
-//
-//        SecurityContextHolder.clearContext();
-//    }
+    @PostMapping("/refresh")
+    public JwtAuthResponse refresh(@Valid @RequestBody RefreshTokenRequest refreshTokenRequest) {
+        RefreshToken refreshToken = refreshTokenService.validateRefreshToken(
+                refreshTokenRequest.refreshToken()
+        );
+
+        RefreshTokenRotationResult rotationResult =
+                refreshTokenService.rotateRefreshToken(refreshTokenRequest.refreshToken());
+
+        AppUser user = rotationResult.user();
+
+        long expiresIn = 900;
+        Instant now = Instant.now();
+
+        JwsHeader jwsHeader = JwsHeader.with(MacAlgorithm.HS256)
+                .build();
+
+        String accessToken = jwtEncoder.encode(JwtEncoderParameters.from(
+                        jwsHeader,
+                        JwtClaimsSet.builder()
+                                .issuer("escape-api")
+                                .issuedAt(now)
+                                .expiresAt(now.plusSeconds(expiresIn))
+                                .subject(user.getId()
+                                        .toString())
+                                .claim("email", user.getEmail())
+                                .claim("role", user.getRole()
+                                        .name())
+                                .build()
+                ))
+                .getTokenValue();
+
+        return new JwtAuthResponse(
+                accessToken,
+                rotationResult.refreshToken(),
+                "Bearer",
+                expiresIn
+        );
+    }
+
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(@Valid @RequestBody LogoutRequest logoutRequest) {
+        refreshTokenService.revokeRefreshToken(logoutRequest.refreshToken());
+    }
 
 
 }
