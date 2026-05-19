@@ -16,7 +16,7 @@ public class PingController {
         return "private pong";
     }
 
-    @GetMapping("/admin/ping")
+    @GetMapping("/api/admin/ping")
     @PreAuthorize("hasRole('ADMIN')")
     public String adminPing() {
         return "admin pong";
