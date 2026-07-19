@@ -1,12 +1,12 @@
 package dev.raul.escape.auth;
 
+import com.jayway.jsonpath.JsonPath;
 import dev.raul.escape.user.AppUser;
 import dev.raul.escape.user.AppUserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -123,9 +123,10 @@ public class AuthControllerIntegrationTest {
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("login@example.com"))
-                .andExpect(jsonPath("$.displayName").value("Login User"))
-                .andExpect(jsonPath("$.role").value("USER"));
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn").value(900));
     }
 
     @Test
@@ -180,17 +181,13 @@ public class AuthControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        MockHttpSession session =
-                (MockHttpSession) loginResult.getRequest()
-                        .getSession(false);
+        String accessToken = JsonPath
+                .parse(loginResult.getResponse()
+                        .getContentAsString())
+                .read("$.accessToken");
 
-        assert session != null;
         mockMvc.perform(get("/api/auth/me")
-                        .session(session))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("me@example.com"))
-                .andExpect(jsonPath("$.displayName").value("Current User"))
-                .andExpect(jsonPath("$.role").value("USER"));
+                .header("Authorization", "Bearer " + accessToken));
     }
 
     @Test
@@ -217,20 +214,36 @@ public class AuthControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        MockHttpSession session = (MockHttpSession) loginResult.getRequest()
-                .getSession(false);
+        String responseBody = loginResult.getResponse()
+                .getContentAsString();
+
+        String accessToken = JsonPath.parse(responseBody)
+                .read("$.accessToken");
+
+        String refreshToken = JsonPath.parse(responseBody)
+                .read("$.refreshToken");
 
         mockMvc.perform(post("/api/auth/logout")
-                        .session(session))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "refreshToken": "%s"
+                                }
+                                """.formatted(refreshToken)))
                 .andExpect(status().isNoContent());
-
-        assertThat(session.isInvalid()).isTrue();
     }
 
     @Test
-    void shouldLogoutSuccessfullyWithoutExistingSession() throws Exception {
-        mockMvc.perform(post("/api/auth/logout"))
-                .andExpect(status().isNoContent());
+    void shouldRejectLogoutWithoutAuthentication() throws Exception {
+        mockMvc.perform(post("/api/auth/logout")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "refreshToken": "dummy-token"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
     }
 
 }

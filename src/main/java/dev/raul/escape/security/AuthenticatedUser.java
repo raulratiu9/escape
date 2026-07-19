@@ -28,7 +28,7 @@ public record AuthenticatedUser(AppUser user) implements UserDetails {
 
     @Override
     public String getUsername() {
-        return user.getDisplayName();
+        return user.getEmail();
     }
 
     @Override

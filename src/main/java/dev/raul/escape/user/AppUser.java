@@ -16,7 +16,7 @@ public class AppUser {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(nullable = false)
+    @Column(name = "password_hash", nullable = true)
     private String passwordHash;
 
     @Column(nullable = false)
@@ -32,6 +32,10 @@ public class AppUser {
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private AuthProvider authProvider = AuthProvider.LOCAL;
+
     protected AppUser() {
     }
 
@@ -39,6 +43,15 @@ public class AppUser {
         this.email = email;
         this.passwordHash = passwordHash;
         this.displayName = displayName;
+    }
+
+    public AppUser(String email, String passwordHash, String displayName, AuthProvider authProvider) {
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.displayName = displayName;
+        this.role = Role.USER;
+        this.enabled = true;
+        this.authProvider = authProvider;
     }
 
     public UUID getId() {
@@ -71,5 +84,9 @@ public class AppUser {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public AuthProvider getAuthProvider() {
+        return authProvider;
     }
 }

@@ -1,5 +1,6 @@
 package dev.raul.escape.common;
 
+import com.jayway.jsonpath.JsonPath;
 import dev.raul.escape.user.AppUser;
 import dev.raul.escape.user.AppUserRepository;
 import dev.raul.escape.user.Role;
@@ -7,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @SpringBootTest
 public class PingControllerIntegrationTest {
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -29,7 +30,6 @@ public class PingControllerIntegrationTest {
         mockMvc.perform(get("/api/public/ping"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("public pong"));
-
     }
 
     @Test
@@ -56,11 +56,10 @@ public class PingControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        MockHttpSession session = (MockHttpSession) loginResult.getRequest()
-                .getSession(false);
+        String accessToken = extractAccessToken(loginResult);
 
         mockMvc.perform(get("/api/private/ping")
-                        .session(session))
+                        .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(content().string("private pong"));
     }
@@ -73,7 +72,7 @@ public class PingControllerIntegrationTest {
                                 {
                                   "email": "admin@example.com",
                                   "password": "password123",
-                                  "displayName": "Private Ping User"
+                                  "displayName": "Admin User"
                                 }
                                 """))
                 .andExpect(status().isCreated())
@@ -84,7 +83,6 @@ public class PingControllerIntegrationTest {
 
         user.setRole(Role.ADMIN);
         appUserRepository.save(user);
-
 
         MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
                         .contentType("application/json")
@@ -97,12 +95,19 @@ public class PingControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        MockHttpSession session = (MockHttpSession) loginResult.getRequest()
-                .getSession(false);
+        String accessToken = extractAccessToken(loginResult);
 
         mockMvc.perform(get("/api/admin/ping")
-                        .session(session))
+                        .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(content().string("admin pong"));
+    }
+
+    private String extractAccessToken(MvcResult loginResult) throws Exception {
+        String responseBody = loginResult.getResponse()
+                .getContentAsString();
+
+        return JsonPath.parse(responseBody)
+                .read("$.accessToken");
     }
 }

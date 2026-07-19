@@ -1,4 +1,4 @@
-package dev.raul.escape.auth;
+package dev.raul.escape.auth.service;
 
 import dev.raul.escape.user.AppUser;
 import jakarta.persistence.*;
@@ -78,5 +78,5 @@ public class RefreshToken {
     public boolean isActive() {
         return !isRevoked() && !isExpired();
     }
-    
+
 }

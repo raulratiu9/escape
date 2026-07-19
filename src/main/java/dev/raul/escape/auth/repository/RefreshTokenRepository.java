@@ -1,5 +1,6 @@
-package dev.raul.escape.auth;
+package dev.raul.escape.auth.repository;
 
+import dev.raul.escape.auth.service.RefreshToken;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

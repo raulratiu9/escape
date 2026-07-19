@@ -1,4 +1,4 @@
-package dev.raul.escape.auth;
+package dev.raul.escape.auth.exception;
 
 public class EmailAlreadyRegisteredException extends RuntimeException {
 

@@ -1,4 +1,4 @@
-package dev.raul.escape.auth;
+package dev.raul.escape.auth.dto;
 
 import dev.raul.escape.user.AppUser;
 

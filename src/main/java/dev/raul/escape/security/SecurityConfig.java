@@ -3,6 +3,7 @@ package dev.raul.escape.security;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -25,9 +26,37 @@ import javax.crypto.spec.SecretKeySpec;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-
+    @Order(1)
+    SecurityFilterChain oauth2LoginChain(HttpSecurity http) throws Exception {
         return http
+                .securityMatcher(
+                        "/oauth2/**",
+                        "/login/oauth2/**",
+                        "/login",
+                        "/api/auth/oauth2/success"
+                )
+                .csrf(AbstractHttpConfigurer::disable)
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/oauth2/**", "/login/oauth2/**", "/login")
+                        .permitAll()
+                        .requestMatchers("/api/auth/oauth2/success")
+                        .authenticated()
+                )
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                )
+                .oauth2Login(oauth2 -> oauth2
+                        .defaultSuccessUrl("/api/auth/oauth2/success", true)
+                )
+                .build();
+    }
+
+
+    @Bean
+    @Order(2)
+    SecurityFilterChain apiSecurityChain(HttpSecurity http) throws Exception {
+        return http
+                .securityMatcher("/api/**", "/actuator/**", "/h2-console/**")
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
@@ -35,15 +64,15 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/api/auth/register",
                                 "/api/auth/login",
-                                "/api/auth/logout",
-                                "/api/auth/refresh",
-                                "/h2-console/**")
+                                "/h2-console/**"
+                        )
                         .permitAll()
                         .anyRequest()
                         .authenticated()
                 )
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
+                .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )

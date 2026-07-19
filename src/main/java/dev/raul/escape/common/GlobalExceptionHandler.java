@@ -1,7 +1,9 @@
 package dev.raul.escape.common;
 
-import dev.raul.escape.auth.EmailAlreadyRegisteredException;
-import dev.raul.escape.auth.InvalidRefreshTokenException;
+import dev.raul.escape.auth.exception.EmailAlreadyRegisteredException;
+import dev.raul.escape.auth.exception.EmailAlreadyRegisteredWithLocalLoginException;
+import dev.raul.escape.auth.exception.InvalidRefreshTokenException;
+import dev.raul.escape.auth.exception.OAuth2EmailMissingException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -78,6 +80,35 @@ public class GlobalExceptionHandler {
                 HttpStatus.UNAUTHORIZED.value(),
                 "Unauthorized",
                 exception.getMessage(),
+                request.getRequestURI(),
+                Map.of()
+        );
+    }
+
+    @ExceptionHandler(EmailAlreadyRegisteredWithLocalLoginException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiError handleEmailAlreadyRegisteredWithLocalLogin(
+            EmailAlreadyRegisteredWithLocalLoginException ex,
+            HttpServletRequest request
+    ) {
+        return new ApiError(
+                Instant.now(),
+                HttpStatus.CONFLICT.value(),
+                "EMAIL_ALREADY_REGISTERED_WITH_LOCAL_LOGIN",
+                ex.getMessage(),
+                request.getRequestURI(),
+                Map.of()
+        );
+    }
+
+    @ExceptionHandler(OAuth2EmailMissingException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleOAuth2EmailMissing(OAuth2EmailMissingException ex, HttpServletRequest request) {
+        return new ApiError(
+                Instant.now(),
+                HttpStatus.CONFLICT.value(),
+                "OAUTH2_EMAIL_MISSING",
+                ex.getMessage(),
                 request.getRequestURI(),
                 Map.of()
         );
